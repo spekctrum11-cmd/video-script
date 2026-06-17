@@ -1,0 +1,10 @@
+{
+    "name": "Insurance Video Verification",
+    "short_name": "InsureVerify",
+    "description": "Verify your insurance policy with a simple video recording",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#1d4ed8",
+    "orientation": "portrait"
+}

@@ -3,24 +3,143 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --primary: #1d4ed8;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f4f6;
+  --secondary-foreground: #1f2937;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --accent: #f3f4f6;
+  --accent-foreground: #1f2937;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #1d4ed8;
+  --radius: 0.5rem;
+  /* Safe area for notches and bottom nav */
+  --safe-top: env(safe-area-inset-top, 0);
+  --safe-bottom: env(safe-area-inset-bottom, 0);
+  --safe-left: env(safe-area-inset-left, 0);
+  --safe-right: env(safe-area-inset-right, 0);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  /* Prevent zoom on input focus */
+  font-size: 16px;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  /* Prevent pull-to-refresh on iOS */
+  overscroll-behavior: contain;
+  /* Prevent double-tap zoom on Android */
+  touch-action: manipulation;
+}
+
+* {
+  border-color: var(--border);
+}
+
+/* Mobile-first responsive text sizing */
+@media (max-width: 640px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+/* Touch targets - minimum 44x44px for mobile accessibility */
+button, input[type="button"], input[type="submit"], a[role="button"], [role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Input fields for mobile */
+input, textarea, select {
+  font-size: 16px; /* Prevents iOS zoom on focus */
+  padding: 12px;
+  border-radius: 8px;
+}
+
+/* Remove default browser styling on mobile */
+input[type="text"],
+input[type="tel"],
+input[type="email"],
+input[type="number"] {
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 8px;
+}
+
+/* Responsive scrolling */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe area padding for notches */
+.safe-top {
+  padding-top: max(1rem, var(--safe-top));
+}
+
+.safe-bottom {
+  padding-bottom: max(1rem, var(--safe-bottom));
+}
+
+.safe-left {
+  padding-left: max(1rem, var(--safe-left));
+}
+
+.safe-right {
+  padding-right: max(1rem, var(--safe-right));
+}
+
+/* Prevent horizontal scroll on mobile */
+body, html {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* Video element responsive sizing */
+video {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Responsive grid - 1 column on mobile, 2+ on larger screens */
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: 1fr !important;
+  }
 }

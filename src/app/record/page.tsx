@@ -866,11 +866,11 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
                             <Button
                                 onClick={resetRecording}
                                 variant="outline"
-                                className="flex-[1_1_0%] min-w-0 h-auto text-sm sm:text-base border-gray-500 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl px-3"
+                                className="flex-[1_1_0%] min-w-0 h-auto text-sm sm:text-base border-gray-800 text-gray-800 hover:bg-gray-800 hover:text-white rounded-xl px-3"
                             >
                                 <span className="flex items-center justify-center gap-1.5 truncate">
                                     <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-                                    <span className="truncate text-gray-700">Re-record</span>
+                                    <span className="truncate ">Re-record</span>
                                 </span>
                             </Button>
                             <Button

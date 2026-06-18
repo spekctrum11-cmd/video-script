@@ -76,14 +76,14 @@ export async function POST(request: NextRequest) {
         const arrayBuffer = await videoFile.arrayBuffer();
         const videoBuffer = Buffer.from(arrayBuffer);
 
-        // Compress video ~50x before uploading to Cloudinary
+        // Compress video (progressive fallback: aggressive → medium → light)
+        // compressVideo guarantees the output is always smaller than input
         let compressedBuffer: Buffer;
         try {
             compressedBuffer = await compressVideo(videoBuffer);
         } catch (error) {
             console.error("Video compression error:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            // Check for common ffmpeg errors and give user-friendly message
             if (msg.includes("spawn") || msg.includes("ENOENT") || msg.includes("ffmpeg binary not found")) {
                 return NextResponse.json(
                     { error: "Video processing tool is not available on the server. Please contact support." },
@@ -91,12 +91,12 @@ export async function POST(request: NextRequest) {
                 );
             }
             return NextResponse.json(
-                { error: "Failed to compress video. Please try again with a shorter video." },
+                { error: "Failed to compress video. Please try again with a shorter video or different format." },
                 { status: 500 }
             );
         }
 
-        // Upload compressed video to Cloudinary
+        // Upload video to Cloudinary
         let cloudinaryResult;
         try {
             cloudinaryResult = await uploadVideo(compressedBuffer, vid);

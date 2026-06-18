@@ -870,7 +870,7 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
                             >
                                 <span className="flex items-center justify-center gap-1.5 truncate">
                                     <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-                                    <span className="truncate">Re-record</span>
+                                    <span className="truncate text-gray-700">Re-record</span>
                                 </span>
                             </Button>
                             <Button

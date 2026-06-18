@@ -4,30 +4,53 @@ import { join } from 'path';
 
 /**
  * Resolves the path to the ffmpeg binary.
+ * 
+ * Strategy:
+ * 1. Windows: Try @ffmpeg-installer/win32-x64 (optional dependency, only resolves on Windows)
+ * 2. Linux/Mac: Try system PATH (ffmpeg should be installed via buildpack or apt-get)
+ * 3. Fallback: Try common node_modules paths
+ * 
  * Called at runtime (not module load) to avoid Next.js Turbopack bundling issues
  * with dynamic require() and filesystem operations.
  */
 function getFfmpegPath(): string {
-    const paths: string[] = [
-        // Direct node_modules path from cwd
-        join(process.cwd(), 'node_modules', '@ffmpeg-installer', 'win32-x64', 'ffmpeg.exe'),
-        // One level up (for monorepo setups)
-        join(process.cwd(), '..', 'node_modules', '@ffmpeg-installer', 'win32-x64', 'ffmpeg.exe'),
-    ];
+    const platform = process.platform;
+    const isWin = platform === 'win32';
+    const binaryName = isWin ? 'ffmpeg.exe' : 'ffmpeg';
 
-    for (const p of paths) {
+    // On Windows: try the optional @ffmpeg-installer/win32-x64 package
+    if (isWin) {
         try {
-            if (existsSync(p)) {
-                return p;
+            // Dynamic require to avoid Turbopack bundling issues
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const ffmpegInstaller = require('@ffmpeg-installer/win32-x64');
+            if (ffmpegInstaller?.path && existsSync(ffmpegInstaller.path)) {
+                return ffmpegInstaller.path;
             }
         } catch {
-            continue;
+            // Package not installed, fall through
+        }
+
+        // Fallback on Windows: check node_modules path directly
+        const winPaths: string[] = [
+            join(process.cwd(), 'node_modules', '@ffmpeg-installer', 'win32-x64', 'ffmpeg.exe'),
+            join(process.cwd(), '..', 'node_modules', '@ffmpeg-installer', 'win32-x64', 'ffmpeg.exe'),
+        ];
+
+        for (const p of winPaths) {
+            try {
+                if (existsSync(p)) {
+                    return p;
+                }
+            } catch {
+                continue;
+            }
         }
     }
 
-    // Fallback: try system PATH
+    // Try system PATH (works on Linux with ffmpeg installed, and as fallback on Windows)
     try {
-        const cmd = process.platform === 'win32' ? 'where' : 'which';
+        const cmd = isWin ? 'where' : 'which';
         const result = execSync(`${cmd} ffmpeg`, { encoding: 'utf8', timeout: 2000 }).trim().split('\n')[0];
         if (result) return result;
     } catch {
@@ -35,7 +58,10 @@ function getFfmpegPath(): string {
     }
 
     throw new Error(
-        'ffmpeg binary not found. Ensure @ffmpeg-installer/win32-x64 is installed correctly.'
+        `ffmpeg binary not found. ${isWin
+            ? 'Ensure @ffmpeg-installer/win32-x64 is installed correctly.'
+            : 'Ensure ffmpeg is installed on your system (e.g., apt-get install ffmpeg).'
+        }`
     );
 }
 

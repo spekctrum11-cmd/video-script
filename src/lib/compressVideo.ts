@@ -67,7 +67,10 @@ let _ffmpegPath: string | null = null;
  * - Each level has its OWN timeout based on preset complexity.
  */
 function getLevelConfig(level: CompressionLevel): LevelConfig {
-    // Base args for all levels — critical for pipe input reliability
+    // CRITICAL: Do NOT use -movflags +faststart when piping to stdout.
+    // +faststart requires file seeking (to move moov atom to beginning),
+    // which is impossible on a pipe. It causes immediate exit code 1
+    // with zero output.
     const baseInput = [
         '-y',
         '-analyzeduration', '100M',
@@ -75,6 +78,12 @@ function getLevelConfig(level: CompressionLevel): LevelConfig {
         '-fflags', '+genpts',
         '-i', 'pipe:0',
         '-vsync', 'cfr',
+    ];
+
+    // Pipe output for all levels — no +faststart since we can't seek
+    const baseOutput = [
+        '-f', 'mp4',
+        'pipe:1',
     ];
 
     switch (level) {
@@ -86,16 +95,14 @@ function getLevelConfig(level: CompressionLevel): LevelConfig {
                     ...baseInput,
                     '-c:v', 'libx264',
                     '-preset', 'ultrafast',
-                    '-crf', '35',      // Even more aggressive — 35 vs 30
-                    '-vf', 'scale=360:-2', // Lower resolution — 360p vs 480p
-                    '-r', '12',         // Lower framerate — 12fps vs 15fps
+                    '-crf', '35',
+                    '-vf', 'scale=360:-2',
+                    '-r', '12',
                     '-c:a', 'aac',
                     '-ac', '1',
                     '-ar', '22050',
-                    '-b:a', '24k',      // Lower audio bitrate
-                    '-f', 'mp4',
-                    '-movflags', '+faststart',
-                    'pipe:1',
+                    '-b:a', '24k',
+                    ...baseOutput,
                 ],
             };
         case 'medium':
@@ -113,9 +120,7 @@ function getLevelConfig(level: CompressionLevel): LevelConfig {
                     '-ac', '1',
                     '-ar', '22050',
                     '-b:a', '48k',
-                    '-f', 'mp4',
-                    '-movflags', '+faststart',
-                    'pipe:1',
+                    ...baseOutput,
                 ],
             };
         case 'light':
@@ -133,9 +138,7 @@ function getLevelConfig(level: CompressionLevel): LevelConfig {
                     '-ac', '2',
                     '-ar', '44100',
                     '-b:a', '96k',
-                    '-f', 'mp4',
-                    '-movflags', '+faststart',
-                    'pipe:1',
+                    ...baseOutput,
                 ],
             };
     }
@@ -194,25 +197,27 @@ async function compressAtLevel(inputBuffer: Buffer, level: CompressionLevel): Pr
             const inMB = (inputBuffer.length / 1024 / 1024).toFixed(2);
             const outMB = (compressed.length / 1024 / 1024).toFixed(2);
 
-            // Log stderr for diagnostics even on success
-            const stderrTail = stderr.slice(-500).replace(/\n/g, ' | ');
+            // Full stderr for diagnostics (don't truncate — the error might be at the end)
             console.log(
                 `[Compress] ${config.label}: ${inMB}MB→${outMB}MB (${ratio.toFixed(1)}x) ` +
-                `code=${code} time=${elapsed}s stderr="${stderrTail}"`
+                `code=${code} time=${elapsed}s`
             );
+            if (stderr) {
+                console.error(`[Compress] ${config.label} stderr:\n${stderr.slice(-1500)}`);
+            }
 
             if (code === 0) {
                 if (compressed.length === 0) {
-                    reject(new Error(`[EMPTY_OUTPUT] ${config.label}: ffmpeg produced zero bytes`));
+                    reject(new Error(`[EMPTY_OUTPUT] ${config.label}: ffmpeg produced zero bytes. stderr:\n${stderr.slice(-500)}`));
                     return;
                 }
                 resolve(compressed);
             } else {
-                // Non-zero exit — include full context
+                // Non-zero exit — full stderr
                 reject(new Error(
                     `[EXIT_CODE=${code}] ${config.label}. ` +
                     `${inMB}MB input, ${compressed.length > 0 ? outMB + 'MB output' : 'zero output'}, ` +
-                    `${elapsed}s elapsed. stderr: ${stderr.slice(-500)}`
+                    `${elapsed}s elapsed.\nstderr:\n${stderr.slice(-1500)}`
                 ));
             }
         });

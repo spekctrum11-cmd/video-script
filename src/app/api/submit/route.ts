@@ -77,21 +77,28 @@ export async function POST(request: NextRequest) {
         const videoBuffer = Buffer.from(arrayBuffer);
 
         // Compress video (progressive fallback: aggressive → medium → light)
-        // compressVideo guarantees the output is always smaller than input
+        // compressVideo internally tries 3 levels with per-level timeouts
+        // and will always produce a compressed output smaller than input
         let compressedBuffer: Buffer;
         try {
             compressedBuffer = await compressVideo(videoBuffer);
         } catch (error) {
             console.error("Video compression error:", error);
             const msg = error instanceof Error ? error.message : String(error);
-            if (msg.includes("spawn") || msg.includes("ENOENT") || msg.includes("ffmpeg binary not found")) {
+            if (msg.includes("SPAWN_ERROR") || msg.includes("ENOENT") || msg.includes("ffmpeg binary not found")) {
                 return NextResponse.json(
                     { error: "Video processing tool is not available on the server. Please contact support." },
                     { status: 500 }
                 );
             }
+            // Pass the diagnostic info to help debugging
+            const diag = error instanceof Error ? error.message.slice(0, 200) : "Unknown error";
             return NextResponse.json(
-                { error: "Failed to compress video. Please try again with a shorter video or different format." },
+                {
+                    error: "Failed to compress video.",
+                    detail: diag,
+                    suggestion: "Try a shorter recording or a different browser."
+                },
                 { status: 500 }
             );
         }

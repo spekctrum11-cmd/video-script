@@ -584,7 +584,7 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
 
             // Check content-type before parsing JSON to avoid "Unexpected token '<'" errors
             const contentType = response.headers.get("content-type") || "";
-            let result: { error?: string; success?: boolean; verificationId?: string; message?: string };
+            let result: { error?: string; detail?: string; suggestion?: string; success?: boolean; verificationId?: string; message?: string };
 
             if (contentType.includes("application/json")) {
                 result = await response.json();
@@ -596,7 +596,11 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
             }
 
             if (!response.ok) {
-                throw new Error(result.error || "Upload failed");
+                // Use detail+suggestion if available, otherwise fall back to error
+                const msg = result.detail
+                    ? `${result.error} ${result.suggestion || ""} (${result.detail})`
+                    : (result.error || "Upload failed");
+                throw new Error(msg);
             }
 
             toast.success("Verification submitted successfully!", {

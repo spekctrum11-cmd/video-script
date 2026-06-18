@@ -1,58 +1,43 @@
-import { spawn, execSync } from 'child_process';
+import { spawn } from 'child_process';
 import { existsSync } from 'fs';
-import { join } from 'path';
 
 export type CompressionLevel = 'aggressive' | 'medium' | 'light';
+
+interface LevelConfig {
+    label: string;
+    args: string[];
+    /** Timeout in ms for this compression level */
+    timeout: number;
+}
 
 /**
  * Resolves the path to the ffmpeg binary.
  * 
- * Strategy:
- * 1. Windows: Try @ffmpeg-installer/win32-x64 (optional dependency, only resolves on Windows)
- * 2. Linux/Mac: Try system PATH (ffmpeg should be installed via buildpack or apt-get)
- * 3. Fallback: Try common node_modules paths
+ * Uses `ffmpeg-static` which bundles a platform-specific ffmpeg binary
+ * for Windows, Linux, and macOS. No system-level ffmpeg installation needed.
  * 
+ * Falls back to system PATH if ffmpeg-static is not available.
  * Called at runtime (not module load) to avoid Next.js Turbopack bundling issues
  * with dynamic require() and filesystem operations.
  */
 function getFfmpegPath(): string {
-    const platform = process.platform;
-    const isWin = platform === 'win32';
-    const binaryName = isWin ? 'ffmpeg.exe' : 'ffmpeg';
-
-    // On Windows: try the optional @ffmpeg-installer/win32-x64 package
-    if (isWin) {
-        try {
-            // Dynamic require to avoid Turbopack bundling issues
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            const ffmpegInstaller = require('@ffmpeg-installer/win32-x64');
-            if (ffmpegInstaller?.path && existsSync(ffmpegInstaller.path)) {
-                return ffmpegInstaller.path;
-            }
-        } catch {
-            // Package not installed, fall through
+    // Primary: use ffmpeg-static (cross-platform, bundles binary for all OS)
+    try {
+        // Dynamic require to avoid Turbopack bundling issues
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const ffmpegPath = require('ffmpeg-static');
+        if (ffmpegPath && existsSync(ffmpegPath)) {
+            return ffmpegPath;
         }
-
-        // Fallback on Windows: check node_modules path directly
-        const winPaths: string[] = [
-            join(process.cwd(), 'node_modules', '@ffmpeg-installer', 'win32-x64', 'ffmpeg.exe'),
-            join(process.cwd(), '..', 'node_modules', '@ffmpeg-installer', 'win32-x64', 'ffmpeg.exe'),
-        ];
-
-        for (const p of winPaths) {
-            try {
-                if (existsSync(p)) {
-                    return p;
-                }
-            } catch {
-                continue;
-            }
-        }
+    } catch {
+        // Package not installed, fall through
     }
 
-    // Try system PATH (works on Linux with ffmpeg installed, and as fallback on Windows)
+    // Fallback: try system PATH
     try {
+        const isWin = process.platform === 'win32';
         const cmd = isWin ? 'where' : 'which';
+        const { execSync } = require('child_process');
         const result = execSync(`${cmd} ffmpeg`, { encoding: 'utf8', timeout: 2000 }).trim().split('\n')[0];
         if (result) return result;
     } catch {
@@ -60,113 +45,132 @@ function getFfmpegPath(): string {
     }
 
     throw new Error(
-        `ffmpeg binary not found. ${isWin
-            ? 'Ensure @ffmpeg-installer/win32-x64 is installed correctly.'
-            : 'Ensure ffmpeg is installed on your system (e.g., apt-get install ffmpeg).'
-        }`
+        'ffmpeg binary not found. Ensure ffmpeg-static is installed correctly.'
     );
 }
 
 /** Lazy-cached ffmpeg path */
 let _ffmpegPath: string | null = null;
 
-/** Returns ffmpeg args for a given compression level */
-function getCompressionArgs(level: CompressionLevel): string[] {
+/**
+ * Builds the compression configuration for each level.
+ * 
+ * Key design decisions:
+ * - `-analyzeduration 100M`: Ensures ffmpeg can properly probe piped webm input
+ *   without failing (pipe:0 has no seek capability, so ffmpeg needs 
+ *   enough analyzeduration budget to figure out the format).
+ * - `-probesize 100M`: Same reason — large probe window for pipe input.
+ * - `fflags +genpts`: Generates PTS timestamps for piped input, critical for webm
+ *   streams from MediaRecorder which may have missing/invalid timestamps.
+ * - `vsync cfr`: Forces constant framerate output, handles variable framerate 
+ *   webm recordings gracefully.
+ * - Each level has its OWN timeout based on preset complexity.
+ */
+function getLevelConfig(level: CompressionLevel): LevelConfig {
+    // Base args for all levels — critical for pipe input reliability
+    const baseInput = [
+        '-y',
+        '-analyzeduration', '100M',
+        '-probesize', '100M',
+        '-fflags', '+genpts',
+        '-i', 'pipe:0',
+        '-vsync', 'cfr',
+    ];
+
     switch (level) {
         case 'aggressive':
-            return [
-                '-y',
-                '-i', 'pipe:0',
-                '-c:v', 'libx264',
-                '-preset', 'ultrafast',
-                '-crf', '30',
-                '-vf', 'scale=480:-2',
-                '-r', '15',
-                '-c:a', 'aac',
-                '-ac', '1',
-                '-ar', '22050',
-                '-b:a', '32k',
-                '-f', 'mp4',
-                '-movflags', '+faststart',
-                'pipe:1',
-            ];
+            return {
+                label: 'aggressive (~50x)',
+                timeout: 60_000, // ultrafast preset — should finish quickly
+                args: [
+                    ...baseInput,
+                    '-c:v', 'libx264',
+                    '-preset', 'ultrafast',
+                    '-crf', '35',      // Even more aggressive — 35 vs 30
+                    '-vf', 'scale=360:-2', // Lower resolution — 360p vs 480p
+                    '-r', '12',         // Lower framerate — 12fps vs 15fps
+                    '-c:a', 'aac',
+                    '-ac', '1',
+                    '-ar', '22050',
+                    '-b:a', '24k',      // Lower audio bitrate
+                    '-f', 'mp4',
+                    '-movflags', '+faststart',
+                    'pipe:1',
+                ],
+            };
         case 'medium':
-            return [
-                '-y',
-                '-i', 'pipe:0',
-                '-c:v', 'libx264',
-                '-preset', 'veryfast',
-                '-crf', '23',
-                '-vf', 'scale=640:-2',
-                '-r', '20',
-                '-c:a', 'aac',
-                '-ac', '1',
-                '-ar', '22050',
-                '-b:a', '48k',
-                '-f', 'mp4',
-                '-movflags', '+faststart',
-                'pipe:1',
-            ];
+            return {
+                label: 'medium (~20x)',
+                timeout: 90_000, // veryfast preset needs more time
+                args: [
+                    ...baseInput,
+                    '-c:v', 'libx264',
+                    '-preset', 'veryfast',
+                    '-crf', '28',
+                    '-vf', 'scale=480:-2',
+                    '-r', '18',
+                    '-c:a', 'aac',
+                    '-ac', '1',
+                    '-ar', '22050',
+                    '-b:a', '48k',
+                    '-f', 'mp4',
+                    '-movflags', '+faststart',
+                    'pipe:1',
+                ],
+            };
         case 'light':
-            return [
-                '-y',
-                '-i', 'pipe:0',
-                '-c:v', 'libx264',
-                '-preset', 'medium',
-                '-crf', '18',
-                '-vf', 'scale=854:-2',
-                '-r', '24',
-                '-c:a', 'aac',
-                '-ac', '2',
-                '-ar', '44100',
-                '-b:a', '96k',
-                '-f', 'mp4',
-                '-movflags', '+faststart',
-                'pipe:1',
-            ];
-    }
-}
-
-/** Returns a human-readable label for the compression level */
-function getLevelLabel(level: CompressionLevel): string {
-    switch (level) {
-        case 'aggressive': return 'aggressive (~50x)';
-        case 'medium': return 'medium (~20x)';
-        case 'light': return 'light (~5x)';
+            return {
+                label: 'light (~5x)',
+                timeout: 120_000, // medium preset is slowest — full maxDuration
+                args: [
+                    ...baseInput,
+                    '-c:v', 'libx264',
+                    '-preset', 'medium',
+                    '-crf', '23',
+                    '-vf', 'scale=640:-2',
+                    '-r', '24',
+                    '-c:a', 'aac',
+                    '-ac', '2',
+                    '-ar', '44100',
+                    '-b:a', '96k',
+                    '-f', 'mp4',
+                    '-movflags', '+faststart',
+                    'pipe:1',
+                ],
+            };
     }
 }
 
 /**
- * Compresses a video buffer at the given quality level.
- * Each level progressively reduces compression to ensure output is always
- * smaller than input when possible.
- *
- * @param inputBuffer - Raw video file buffer
- * @param level - Compression quality level (default: aggressive)
- * @returns Compressed MP4 buffer
+ * Executes a single ffmpeg compression pass.
+ * Uses spawn with pipe:0 stdin and pipe:1 stdout for in-memory processing.
  */
 async function compressAtLevel(inputBuffer: Buffer, level: CompressionLevel): Promise<Buffer> {
-    // Resolve ffmpeg path lazily (first call only)
     if (!_ffmpegPath) {
         _ffmpegPath = getFfmpegPath();
         console.log(`[Compress] ffmpeg resolved to: ${_ffmpegPath}`);
     }
 
+    const config = getLevelConfig(level);
+
     return new Promise((resolve, reject) => {
         const chunks: Buffer[] = [];
         let stderr = '';
         const startTime = Date.now();
-        const args = getCompressionArgs(level);
 
-        const ffmpeg = spawn(_ffmpegPath!, args, {
+        const ffmpeg = spawn(_ffmpegPath!, config.args, {
             stdio: ['pipe', 'pipe', 'pipe'],
         });
 
-        // 60-second safety timeout
+        // Per-level timeout based on preset complexity
         const timeout = setTimeout(() => {
             ffmpeg.kill('SIGKILL');
-            reject(new Error(`ffmpeg ${getLevelLabel(level)} compression timed out after 60 seconds`));
-        }, 60_000);
+            reject(new Error(
+                `[TIMEOUT ${config.timeout / 1000}s] ${config.label}. ` +
+                `Video size: ${(inputBuffer.length / 1024 / 1024).toFixed(2)}MB. ` +
+                `Last stderr: ${stderr.slice(-300)}`
+            ));
+        }, config.timeout);
 
         ffmpeg.stdout.on('data', (chunk: Buffer) => {
             chunks.push(chunk);
@@ -178,92 +182,110 @@ async function compressAtLevel(inputBuffer: Buffer, level: CompressionLevel): Pr
 
         ffmpeg.on('error', (err) => {
             clearTimeout(timeout);
-            reject(new Error(`ffmpeg spawn error: ${err.message}. Path: ${_ffmpegPath}`));
+            reject(new Error(`[SPAWN_ERROR] ${config.label}: ${err.message}. Path: ${_ffmpegPath}`));
         });
 
         ffmpeg.on('close', (code) => {
             clearTimeout(timeout);
 
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            const compressed = Buffer.concat(chunks);
+            const ratio = inputBuffer.length / compressed.length;
+            const inMB = (inputBuffer.length / 1024 / 1024).toFixed(2);
+            const outMB = (compressed.length / 1024 / 1024).toFixed(2);
+
+            // Log stderr for diagnostics even on success
+            const stderrTail = stderr.slice(-500).replace(/\n/g, ' | ');
+            console.log(
+                `[Compress] ${config.label}: ${inMB}MB→${outMB}MB (${ratio.toFixed(1)}x) ` +
+                `code=${code} time=${elapsed}s stderr="${stderrTail}"`
+            );
+
             if (code === 0) {
-                const compressed = Buffer.concat(chunks);
-                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-                const ratio = inputBuffer.length / compressed.length;
-                const inMB = (inputBuffer.length / 1024 / 1024).toFixed(2);
-                const outMB = (compressed.length / 1024 / 1024).toFixed(2);
-
-                console.log(
-                    `[Compress] ${getLevelLabel(level)}: ${inMB}MB → ${outMB}MB (${ratio.toFixed(1)}x) in ${elapsed}s`
-                );
-
+                if (compressed.length === 0) {
+                    reject(new Error(`[EMPTY_OUTPUT] ${config.label}: ffmpeg produced zero bytes`));
+                    return;
+                }
                 resolve(compressed);
             } else {
+                // Non-zero exit — include full context
                 reject(new Error(
-                    `ffmpeg ${getLevelLabel(level)} exited with code ${code}. ` +
-                    `stderr: ${stderr.slice(-500)}`
+                    `[EXIT_CODE=${code}] ${config.label}. ` +
+                    `${inMB}MB input, ${compressed.length > 0 ? outMB + 'MB output' : 'zero output'}, ` +
+                    `${elapsed}s elapsed. stderr: ${stderr.slice(-500)}`
                 ));
             }
         });
 
-        // Feed input and start processing
+        // Feed input
         try {
             ffmpeg.stdin.write(inputBuffer);
             ffmpeg.stdin.end();
         } catch (err) {
             clearTimeout(timeout);
-            reject(new Error(`Failed to write to ffmpeg stdin: ${err}`));
+            reject(new Error(`[STDIN_ERROR] ${config.label}: ${err}`));
         }
     });
 }
 
 /**
- * Compresses a video buffer with progressive fallback.
+ * Compresses a video buffer with progressive fallback across 3 quality levels.
  * 
- * Tries aggressive compression first, then falls back to lighter levels
- * if the output is not smaller than the input. This guarantees that the
- * returned buffer is ALWAYS compressed (smaller than input), unless
- * all three levels fail.
+ * Strategy:
+ * 1. Aggressive (~50x): CRF 35, 360p, 12fps — maximum size reduction (fastest preset)
+ * 2. Medium   (~20x): CRF 28, 480p, 18fps — balanced quality/size (fast preset)
+ * 3. Light    (~5x):  CRF 23, 640p, 24fps — near-lossless (medium preset)
  * 
- * Levels tried in order:
- * 1. Aggressive  (~50x): CRF 30, 480p, 15fps, mono 22kHz 32kbps
- * 2. Medium      (~20x): CRF 23, 640p, 20fps, mono 22kHz 48kbps
- * 3. Light       (~5x):  CRF 18, 854p, 24fps, stereo 44kHz 96kbps
- *
- * @param inputBuffer - Raw video file buffer
- * @returns Compressed MP4 buffer (always smaller than input)
+ * Each level:
+ * - Has its own timeout calibrated to the preset speed
+ * - Uses optimized pipe input flags for reliable webm handling
+ * - Logs detailed stderr for diagnostics
+ * 
+ * @param inputBuffer - Raw video file buffer (e.g., from a recorded webm)
+ * @returns Compressed MP4 buffer (guaranteed smaller than input)
  * @throws Error if all compression levels fail
  */
 export async function compressVideo(inputBuffer: Buffer): Promise<Buffer> {
+    const inputMB = (inputBuffer.length / 1024 / 1024).toFixed(2);
+    console.log(`[Compress] Starting compression: ${inputMB}MB input`);
+
     const levels: CompressionLevel[] = ['aggressive', 'medium', 'light'];
+    let lastError: Error | null = null;
 
     for (const level of levels) {
+        const config = getLevelConfig(level);
+
         try {
             const compressed = await compressAtLevel(inputBuffer, level);
+            const ratio = inputBuffer.length / compressed.length;
             const inMB = (inputBuffer.length / 1024 / 1024).toFixed(2);
             const outMB = (compressed.length / 1024 / 1024).toFixed(2);
-            const ratio = inputBuffer.length / compressed.length;
 
-            console.log(`[Compress] ${getLevelLabel(level)}: ${inMB}MB → ${outMB}MB (${ratio.toFixed(1)}x)`);
+            console.log(`[Compress] ✓ ${config.label}: ${inMB}MB → ${outMB}MB (${ratio.toFixed(1)}x)`);
 
             // Accept ANY reduction in size
             if (compressed.length < inputBuffer.length) {
                 return compressed;
             }
 
-            console.warn(`[Compress] ${getLevelLabel(level)} produced no reduction (${ratio.toFixed(2)}x), trying next level...`);
+            console.warn(`[Compress] ✗ ${config.label}: No reduction (${ratio.toFixed(2)}x), trying next level...`);
+            lastError = new Error(`${config.label}: produced no reduction (${ratio.toFixed(2)}x)`);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            console.warn(`[Compress] ${getLevelLabel(level)} failed: ${msg}`);
+            console.warn(`[Compress] ✗ ${config.label} failed: ${msg}`);
 
-            // If ffmpeg is not available, propagate immediately
-            if (msg.includes("spawn") || msg.includes("ENOENT") || msg.includes("ffmpeg binary not found")) {
-                throw new Error("Video processing tool (ffmpeg) is not available on the server. Please contact support.");
+            // ffmpeg not available — propagate immediately
+            if (msg.includes('SPAWN_ERROR') || msg.includes('ENOENT') || msg.includes('ffmpeg binary not found')) {
+                throw new Error('Video processing tool (ffmpeg) is not available on the server. Please contact support.');
             }
+
+            lastError = err instanceof Error ? err : new Error(String(err));
         }
     }
 
-    // All levels either failed or produced no reduction
+    // All 3 levels failed
+    const diag = lastError ? ` Last error: ${lastError.message}` : '';
     throw new Error(
-        "Failed to compress video. All compression levels were attempted but none could reduce the file size. " +
-        "Please try again with a different video format or a shorter recording."
+        `Failed to compress video after 3 attempts.${diag}`
     );
 }

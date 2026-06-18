@@ -80,16 +80,16 @@ function RecordContent() {
                 video: getVideoConstraints(),
                 audio: { echoCancellation: true, noiseSuppression: true },
             };
-            
+
             const hasGetUserMedia = navigator.mediaDevices && 'getUserMedia' in navigator.mediaDevices;
-            
+
             const info = `Device: ${device.isAndroid ? 'Android' : device.isIOS ? 'iOS' : 'Desktop'}
 Browser: ${device.isChrome ? 'Chrome' : device.isFirefox ? 'Firefox' : device.isSafari ? 'Safari' : 'Unknown'}
 Secure: ${isSecureContext() ? 'Yes' : 'No'}
 Constraints: ${JSON.stringify(constraints, null, 2)}
 MediaDevices: ${navigator.mediaDevices ? 'Available' : 'Not Available'}
 getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
-            
+
             setDiagnosticInfo(info);
         } catch (e) {
             console.warn('Diagnostics error:', e);
@@ -99,7 +99,7 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
     // Get optimized video constraints based on device
     const getVideoConstraints = () => {
         const device = getDeviceInfo();
-        
+
         if (device.isAndroid) {
             // Android needs lower constraints and is more permissive with ideal vs exact
             return {
@@ -156,7 +156,7 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
     // Android-specific permission recovery steps
     const getAndroidRecoverySteps = (): string[] => {
         const device = getDeviceInfo();
-        
+
         // First: Check if it's a browser settings issue
         const browserSteps = [
             "📱 Your browser (Chrome/Firefox) has its own permissions:",
@@ -168,7 +168,7 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
             "6️⃣ Change to 'Allow' (or remove from Block list)",
             "7️⃣ Come back here and try again",
         ];
-        
+
         return browserSteps;
     };
 
@@ -189,7 +189,7 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
     // Get device-appropriate recovery steps
     const getRecoveryStepsForDevice = (): string[] => {
         const device = getDeviceInfo();
-        
+
         if (device.isAndroid) {
             return getAndroidRecoverySteps();
         } else if (device.isIOS) {
@@ -203,7 +203,7 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
     const handleMobileError = (err: unknown) => {
         const device = getDeviceInfo();
         const error = err as { name?: string; message?: string };
-        
+
         console.error("Camera error details:", {
             name: error.name,
             message: error.message,
@@ -443,7 +443,7 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
     // Mobile requires user gesture (click) to trigger getUserMedia
     useEffect(() => {
         const device = getDeviceInfo();
-        
+
         // For desktop browsers, auto-initialize camera
         // For mobile, wait for user click on "Start Recording"
         if (!device.isMobile && !cameraReady && cameraInitAttemptRef.current === 0) {
@@ -613,9 +613,9 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
     }
 
     return (
-        <div className="min-h-screen bg-black text-white flex flex-col">
+        <div className="h-[100dvh] overflow-hidden bg-black text-white flex flex-col">
             {/* Header with policy info */}
-            <div className="bg-gray-900/90 backdrop-blur-sm px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between border-b border-gray-800 flex-wrap gap-2">
+            <div className="bg-gray-900/90 backdrop-blur-sm px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between border-b border-gray-800 flex-wrap gap-2 shrink-0">
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1 sm:gap-2 text-xs text-gray-400 overflow-hidden">
                         <Info className="w-3 h-3 shrink-0" />
@@ -637,12 +637,12 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col relative overflow-hidden">
+            <div className="flex-1 flex flex-col relative overflow-hidden min-h-0">
                 {cameraError ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-3 sm:p-6 md:p-8 bg-gray-900 overflow-y-auto">
                         <CameraOff className="w-12 h-12 sm:w-16 sm:h-16 text-red-400 mb-3 sm:mb-4" />
                         <p className="text-red-400 text-center text-xs sm:text-sm mb-4 sm:mb-6 font-medium max-w-md">{cameraError}</p>
-                        
+
                         {recoverySteps.length > 0 && (
                             <div className="mb-4 sm:mb-6 w-full max-w-md bg-gray-800/50 rounded-lg p-3 sm:p-4 border border-gray-700 max-h-48 overflow-y-auto">
                                 <p className="text-xs font-semibold text-gray-300 mb-2 sm:mb-3">📋 How to Fix This:</p>
@@ -662,7 +662,7 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
                                 <pre className="text-xs text-gray-300">{diagnosticInfo}</pre>
                             </div>
                         )}
-                        
+
                         <div className="flex gap-2 flex-wrap justify-center mt-4 sm:mt-6 max-w-md">
                             {cameraInitAttemptRef.current > 2 ? (
                                 <>
@@ -716,7 +716,8 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
                     </div>
                 ) : (
                     <>
-                        <div className="flex-1 relative bg-black">
+                        {/* Video area - takes remaining space */}
+                        <div className="flex-1 relative bg-black min-h-0">
                             <video
                                 ref={videoRef}
                                 className="absolute inset-0 w-full h-full object-cover"
@@ -731,24 +732,34 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
                             )}
 
                             {state === "recording" && (
-                                <div className="absolute top-4 left-4 flex items-center gap-2 bg-black/60 px-3 py-1.5 rounded-full">
-                                    <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+                                <div className="absolute top-2 sm:top-4 left-2 sm:left-4 flex items-center gap-2 bg-black/60 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full z-20">
+                                    <div className="w-2 sm:w-3 h-2 sm:h-3 rounded-full bg-red-500 animate-pulse" />
                                     <span className="text-xs text-white font-medium">REC</span>
                                 </div>
                             )}
 
                             {state === "paused" && (
-                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
                                     <div className="text-center">
-                                        <Pause className="w-12 h-12 text-yellow-400 mx-auto mb-2" />
+                                        <Pause className="w-10 sm:w-12 h-10 sm:h-12 text-yellow-400 mx-auto mb-2" />
                                         <p className="text-yellow-400 text-sm font-medium">Recording Paused</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Teleprompter overlay on video - only when not in review */}
+                            {state !== "review" && (
+                                <div className="absolute inset-x-0 bottom-0 z-10 p-1.5 sm:p-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pointer-events-none">
+                                    <div className="pointer-events-auto">
+                                        <Teleprompter isRecording={state === "recording"} isPaused={state === "paused"} />
                                     </div>
                                 </div>
                             )}
                         </div>
 
+                        {/* Review video */}
                         {state === "review" && videoUrl && (
-                            <div className="flex-1 relative bg-black flex items-center justify-center">
+                            <div className="flex-1 relative bg-black flex items-center justify-center min-h-0">
                                 <video
                                     src={videoUrl}
                                     className="max-w-full max-h-full object-contain"
@@ -760,11 +771,8 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
                     </>
                 )}
 
-                <div className="bg-gray-900/95 backdrop-blur-sm px-3 sm:px-4 py-2 sm:py-3 space-y-2 sm:space-y-3 border-t border-gray-800 overflow-y-auto max-h-40 sm:max-h-48">
-                    {(state === "recording" || state === "paused") && (
-                        <Teleprompter isRecording={state === "recording"} isPaused={state === "paused"} />
-                    )}
-
+                {/* Controls - always visible at bottom */}
+                <div className="bg-gray-900/95 backdrop-blur-sm px-2 sm:px-4 py-1.5 sm:py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0.5rem))] space-y-1.5 sm:space-y-3 border-t border-gray-800 shrink-0">
                     {state === "idle" && !cameraError && !micError && (
                         <>
                             <Button
@@ -793,72 +801,41 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
                     )}
 
                     {state === "recording" && (
-                        <div className="flex items-center justify-center gap-2 sm:gap-3">
+                        <div className="flex flex-col gap-1.5 sm:gap-3">
+                            <Button
+                                onClick={stopRecording}
+                                className="w-full h-12 sm:h-14 text-sm sm:text-base font-bold bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-xl shadow-lg shadow-red-900/30"
+                            >
+                                <Square className="w-5 h-5 sm:w-6 sm:h-6 mr-2" />
+                                End Recording
+                            </Button>
                             <Button
                                 onClick={pauseRecording}
                                 variant="outline"
-                                className="flex-1 h-11 sm:h-12 text-xs sm:text-sm border-gray-600 text-white hover:bg-gray-800 rounded-xl"
+                                className="w-full h-10 sm:h-12 text-xs sm:text-sm border-gray-600 text-gray-300 hover:bg-gray-800 rounded-xl"
                             >
                                 <Pause className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2" />
-                                <span className="hidden xs:inline">Pause</span>
-                            </Button>
-                            <Button
-                                onClick={stopRecording}
-                                className="h-11 w-11 sm:h-12 sm:w-12 rounded-full bg-red-600 hover:bg-red-700 text-white"
-                            >
-                                <Square className="w-4 h-4 sm:w-5 sm:h-5" />
+                                Pause
                             </Button>
                         </div>
                     )}
 
                     {state === "paused" && (
-                        <div className="flex items-center justify-center gap-2 sm:gap-3">
+                        <div className="flex flex-col gap-1.5 sm:gap-3">
+                            <Button
+                                onClick={stopRecording}
+                                className="w-full h-12 sm:h-14 text-sm sm:text-base font-bold bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-xl shadow-lg shadow-red-900/30"
+                            >
+                                <Square className="w-5 h-5 sm:w-6 sm:h-6 mr-2" />
+                                End Recording
+                            </Button>
                             <Button
                                 onClick={resumeRecording}
                                 variant="outline"
-                                className="flex-1 h-11 sm:h-12 text-xs sm:text-sm border-gray-600 text-white hover:bg-gray-800 rounded-xl"
+                                className="w-full h-10 sm:h-12 text-xs sm:text-sm border-gray-600 text-gray-300 hover:bg-gray-800 rounded-xl"
                             >
                                 <Play className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2" />
-                                <span className="hidden xs:inline">Resume</span>
-                            </Button>
-                            <Button
-                                onClick={stopRecording}
-                                className="h-11 w-11 sm:h-12 sm:w-12 rounded-full bg-red-600 hover:bg-red-700 text-white"
-                            >
-                                <Square className="w-4 h-4 sm:w-5 sm:h-5" />
-                            </Button>
-                        </div>
-                    )}
-
-                    {state === "review" && (
-                        <div className="flex items-center justify-center gap-2 sm:gap-3">
-                            <Button
-                                onClick={resetRecording}
-                                variant="outline"
-                                className="flex-1 h-11 sm:h-12 text-xs sm:text-sm border-gray-600 text-white hover:bg-gray-800 rounded-xl"
-                            >
-                                <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2" />
-                                <span className="hidden xs:inline">Re-record</span>
-                            </Button>
-                            <Button
-                                onClick={submitRecording}
-                                disabled={isUploading}
-                                className="flex-1 h-11 sm:h-12 text-xs sm:text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl"
-                            >
-                                {isUploading ? (
-                                    <span className="flex items-center justify-center gap-1.5 sm:gap-2">
-                                        <svg className="animate-spin h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                        </svg>
-                                        <span className="hidden xs:inline">Uploading...</span>
-                                    </span>
-                                ) : (
-                                    <span className="flex items-center justify-center gap-1.5 sm:gap-2">
-                                        <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
-                                        <span className="hidden xs:inline">Submit</span>
-                                    </span>
-                                )}
+                                Resume
                             </Button>
                         </div>
                     )}
@@ -870,6 +847,42 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
                         </div>
                     )}
                 </div>
+
+                {/* Review controls - show below video in review state */}
+                {state === "review" && (
+                    <div className="bg-gray-900/95 backdrop-blur-sm px-2 sm:px-4 py-2 sm:py-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0.5rem))] space-y-2 sm:space-y-3 border-t border-gray-800 shrink-0">
+                        <div className="flex items-center justify-center gap-2 sm:gap-3">
+                            <Button
+                                onClick={resetRecording}
+                                variant="outline"
+                                className="flex-1 h-12 sm:h-14 text-sm sm:text-base border-gray-600 text-white hover:bg-gray-800 rounded-xl"
+                            >
+                                <RotateCcw className="w-5 h-5 sm:w-6 sm:h-6 mr-2" />
+                                Re-record
+                            </Button>
+                            <Button
+                                onClick={submitRecording}
+                                disabled={isUploading}
+                                className="flex-1 h-12 sm:h-14 text-sm sm:text-base bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl"
+                            >
+                                {isUploading ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                        </svg>
+                                        Uploading...
+                                    </span>
+                                ) : (
+                                    <span className="flex items-center justify-center gap-2">
+                                        <Upload className="w-5 h-5 sm:w-6 sm:h-6" />
+                                        Submit
+                                    </span>
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

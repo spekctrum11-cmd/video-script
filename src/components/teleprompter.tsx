@@ -60,7 +60,7 @@ export default function Teleprompter({ isRecording, isPaused, speed = 1, onCompl
                 cancelAnimationFrame(animationRef.current);
             }
         };
-    }, [isRecording, isPaused, animate, scrollPosition]);
+    }, [isRecording, isPaused, animate]);
 
     useEffect(() => {
         if (containerRef.current) {
@@ -71,21 +71,21 @@ export default function Teleprompter({ isRecording, isPaused, speed = 1, onCompl
     return (
         <div className="relative w-full">
             {/* Gradient overlays for better readability */}
-            <div className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-black/60 to-transparent z-10 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-black/60 to-transparent z-10 pointer-events-none" />
+            <div className="absolute top-0 left-0 right-0 h-6 bg-gradient-to-b from-black/60 to-transparent z-10 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-black/60 to-transparent z-10 pointer-events-none" />
 
             <div
                 ref={containerRef}
-                className="w-full h-32 sm:h-40 md:h-48 overflow-hidden rounded-xl bg-black/40 backdrop-blur-sm border border-white/10 p-3 sm:p-4 scroll-smooth"
+                className="w-full h-28 sm:h-36 overflow-hidden rounded-xl bg-black/50 backdrop-blur-sm border border-white/10 p-2 sm:p-3 scroll-smooth"
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
-                <div className="space-y-2 sm:space-y-3">
+                <div className="space-y-1.5 sm:space-y-2">
                     {DEFAULT_SCRIPT.map((line, index) => (
                         <p
                             key={index}
-                            className={`text-sm sm:text-base leading-relaxed text-center transition-opacity duration-300 ${line === "" ? "h-3 sm:h-4" : line.startsWith("I") || line.startsWith("My")
-                                    ? "text-white font-medium"
-                                    : "text-white/70"
+                            className={`text-xs sm:text-sm leading-relaxed text-center transition-opacity duration-300 ${line === "" ? "h-2 sm:h-3" : line.startsWith("I") || line.startsWith("My")
+                                ? "text-white font-medium"
+                                : "text-white/70"
                                 }`}
                         >
                             {line || "\u00A0"}

@@ -44,7 +44,7 @@ export default function RootLayout({
         <meta name="description" content="Verify your insurance policy with a simple video recording" />
         <meta name="theme-color" content="#1d4ed8" />
       </head>
-      <body className="min-h-full flex flex-col bg-gray-50 safe-bottom">
+      <body className="min-h-full flex flex-col bg-gray-50 safe-bottom" suppressHydrationWarning>
         {children}
         <Toaster />
       </body>

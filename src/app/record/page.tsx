@@ -582,7 +582,18 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
                 body: formData,
             });
 
-            const result = await response.json();
+            // Check content-type before parsing JSON to avoid "Unexpected token '<'" errors
+            const contentType = response.headers.get("content-type") || "";
+            let result: { error?: string; success?: boolean; verificationId?: string; message?: string };
+
+            if (contentType.includes("application/json")) {
+                result = await response.json();
+            } else {
+                // Non-JSON response (e.g. HTML error page from server/body-parser)
+                const text = await response.text();
+                console.error("Non-JSON response:", text.slice(0, 200));
+                throw new Error(response.ok ? "Unexpected server response" : "Server error. Please try again later.");
+            }
 
             if (!response.ok) {
                 throw new Error(result.error || "Upload failed");
@@ -851,32 +862,34 @@ getUserMedia: ${hasGetUserMedia ? 'Available' : 'Not Available'}`;
                 {/* Review controls - show below video in review state */}
                 {state === "review" && (
                     <div className="bg-gray-900/95 backdrop-blur-sm px-2 sm:px-4 py-2 sm:py-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0.5rem))] space-y-2 sm:space-y-3 border-t border-gray-800 shrink-0">
-                        <div className="flex items-center justify-center gap-2 sm:gap-3">
+                        <div className="flex items-stretch justify-center gap-2 sm:gap-3">
                             <Button
                                 onClick={resetRecording}
                                 variant="outline"
-                                className="flex-1 h-12 sm:h-14 text-sm sm:text-base border-gray-600 text-white hover:bg-gray-800 rounded-xl"
+                                className="flex-[1_1_0%] min-w-0 h-auto text-sm sm:text-base border-gray-500 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl px-3"
                             >
-                                <RotateCcw className="w-5 h-5 sm:w-6 sm:h-6 mr-2" />
-                                Re-record
+                                <span className="flex items-center justify-center gap-1.5 truncate">
+                                    <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                                    <span className="truncate">Re-record</span>
+                                </span>
                             </Button>
                             <Button
                                 onClick={submitRecording}
                                 disabled={isUploading}
-                                className="flex-1 h-12 sm:h-14 text-sm sm:text-base bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl"
+                                className="flex-[1_1_0%] min-w-0 h-auto text-sm sm:text-base bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl px-3"
                             >
                                 {isUploading ? (
-                                    <span className="flex items-center justify-center gap-2">
-                                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                                    <span className="flex items-center justify-center gap-1.5 truncate">
+                                        <svg className="animate-spin h-4 w-4 sm:h-5 sm:w-5 shrink-0" viewBox="0 0 24 24">
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                         </svg>
-                                        Uploading...
+                                        <span className="truncate">Uploading...</span>
                                     </span>
                                 ) : (
-                                    <span className="flex items-center justify-center gap-2">
-                                        <Upload className="w-5 h-5 sm:w-6 sm:h-6" />
-                                        Submit
+                                    <span className="flex items-center justify-center gap-1.5 truncate">
+                                        <Upload className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                                        <span className="font-medium text-white truncate">Submit</span>
                                     </span>
                                 )}
                             </Button>

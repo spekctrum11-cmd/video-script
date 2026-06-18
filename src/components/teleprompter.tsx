@@ -13,10 +13,7 @@ const DEFAULT_SCRIPT = [
     "My name is [Customer Name].",
     "",
     "I confirm that I have understood the policy benefits, terms, and conditions.",
-    "",
-    "I am purchasing this policy voluntarily.",
-    "",
-    "I confirm that all information provided by me is accurate and correct.",
+    "I am purchasing this policy voluntarily and I confirm that all information provided by me is accurate and correct."
 ];
 
 export default function Teleprompter({ isRecording, isPaused, speed = 1, onComplete }: TeleprompterProps) {
@@ -76,7 +73,7 @@ export default function Teleprompter({ isRecording, isPaused, speed = 1, onCompl
 
             <div
                 ref={containerRef}
-                className="w-full h-28 sm:h-36 overflow-hidden rounded-xl bg-black/50 backdrop-blur-sm border border-white/10 p-2 sm:p-3 scroll-smooth"
+                className="w-full h-32 sm:h-40 overflow-hidden rounded-xl bg-black/50 backdrop-blur-sm border border-white/10 p-2 sm:p-3 scroll-smooth"
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
                 <div className="space-y-1.5 sm:space-y-2">

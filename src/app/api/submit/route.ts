@@ -2,11 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import VideoVerification from "@/lib/models/VideoVerification";
 import { uploadVideo } from "@/lib/cloudinary";
+import { compressVideo } from "@/lib/compressVideo";
 import { generateVerificationId, validateMobileNumber, formatMobileNumber, getFullMobileNumber } from "@/lib/utils";
+
+export const maxDuration = 120; // 2 minutes for video processing + upload
 
 export async function POST(request: NextRequest) {
     try {
-        const formData = await request.formData();
+        let formData: FormData;
+        try {
+            formData = await request.formData();
+        } catch (parseError: unknown) {
+            const msg = parseError instanceof Error ? parseError.message : String(parseError);
+            console.error("FormData parse error:", msg);
+            return NextResponse.json(
+                { error: "Failed to parse upload data. The file may be too large or the request was interrupted. Please try a shorter video." },
+                { status: 413 }
+            );
+        }
 
         const videoFile = formData.get("video") as File | null;
         const verificationId = formData.get("verificationId") as string | null;
@@ -47,7 +60,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Validate file size (max 100MB)
+        // Validate file size (max 100MB before compression)
         const maxSize = 100 * 1024 * 1024;
         if (videoFile.size > maxSize) {
             return NextResponse.json(
@@ -63,11 +76,39 @@ export async function POST(request: NextRequest) {
         const arrayBuffer = await videoFile.arrayBuffer();
         const videoBuffer = Buffer.from(arrayBuffer);
 
-        // Upload to Cloudinary
+        // Compress video ~50x before uploading to Cloudinary
+        let compressedBuffer: Buffer;
+        try {
+            compressedBuffer = await compressVideo(videoBuffer);
+        } catch (error) {
+            console.error("Video compression error:", error);
+            const msg = error instanceof Error ? error.message : String(error);
+            // Check for common ffmpeg errors and give user-friendly message
+            if (msg.includes("spawn") || msg.includes("ENOENT") || msg.includes("ffmpeg binary not found")) {
+                return NextResponse.json(
+                    { error: "Video processing tool is not available on the server. Please contact support." },
+                    { status: 500 }
+                );
+            }
+            return NextResponse.json(
+                { error: "Failed to compress video. Please try again with a shorter video." },
+                { status: 500 }
+            );
+        }
+
+        // Upload compressed video to Cloudinary
         let cloudinaryResult;
         try {
-            cloudinaryResult = await uploadVideo(videoBuffer, vid);
-        } catch {
+            cloudinaryResult = await uploadVideo(compressedBuffer, vid);
+        } catch (error: unknown) {
+            console.error("Cloudinary upload error:", error);
+            const msg = error instanceof Error ? error.message : String(error);
+            if (msg.includes("Authentication") || msg.includes("api_key") || msg.includes("api_secret")) {
+                return NextResponse.json(
+                    { error: "Storage service configuration error. Please contact support." },
+                    { status: 500 }
+                );
+            }
             return NextResponse.json(
                 { error: "Failed to upload video to storage. Please try again." },
                 { status: 500 }
@@ -75,19 +116,35 @@ export async function POST(request: NextRequest) {
         }
 
         // Connect to MongoDB and save
-        await connectDB();
+        try {
+            await connectDB();
+        } catch (error) {
+            console.error("Database connection error:", error);
+            return NextResponse.json(
+                { error: "Database connection failed. Please try again later." },
+                { status: 500 }
+            );
+        }
 
-        const verification = new VideoVerification({
-            verificationId: vid,
-            policyNumber: policyNumber.trim(),
-            mobileNumber: formattedMobile,
-            videoUrl: cloudinaryResult.url,
-            cloudinaryPublicId: cloudinaryResult.publicId,
-            videoDuration: parseInt(duration || "0", 10),
-            status: "submitted",
-        });
+        try {
+            const verification = new VideoVerification({
+                verificationId: vid,
+                policyNumber: policyNumber.trim(),
+                mobileNumber: formattedMobile,
+                videoUrl: cloudinaryResult.url,
+                cloudinaryPublicId: cloudinaryResult.publicId,
+                videoDuration: parseInt(duration || "0", 10),
+                status: "submitted",
+            });
 
-        await verification.save();
+            await verification.save();
+        } catch (error) {
+            console.error("Database save error:", error);
+            return NextResponse.json(
+                { error: "Failed to save verification record. Please try again." },
+                { status: 500 }
+            );
+        }
 
         return NextResponse.json({
             success: true,
